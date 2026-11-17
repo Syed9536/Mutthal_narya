@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Bed Shooter</title>
+<!--
+  ============================================================
+  BED SHOOTER — VS CODE SETUP (2 minute)
+  ============================================================
+  1. Is file ko apne project folder me save karo, naam:  index.html
+  2. Ussi folder ke andar ek folder banao, naam:  assets
+     (index.html ke saath, uske andar — assets/index.html NAHI)
+  3. Apne real face photos ko assets/ folder me daalo, EXACT
+     ye naam se (capital/small letter bhi same rakho — naam
+     case-sensitive hai, .png ya .jpg dono chalenge, bas naam
+     same hona chahiye):
+
+       assets/bed.png    -> bed wale aadmi ka face (1 photo)
+       assets/fly1.png   -> udne wala character 1
+       assets/fly2.png   -> udne wala character 2
+       assets/fly3.png   -> udne wala character 3
+       assets/fly4.png   -> udne wala character 4
+       assets/fly5.png   -> udne wala character 5
+
+     Sirf 2 face hain to fly3/fly4/fly5 wali lines neeche
+     FLY_FACE_FILES list se hata do — game baaki faces se
+     hi randomly chalega, koi error nahi aayega.
+  4. Photo tips: square photo best hai, face beech me ho,
+     aage se liya hua (front-facing). Background kaisa bhi
+     ho — photo oval shape me crop ho ke lag jayegi.
+     Jab tak photo nahi daloge, tab tak cartoon face dikhega.
+  5. Awaaz (baad me):  assets/hit.mp3  -> bed wale ki hit
+     wali voice. File na ho to game bina awaaz ke chalega.
+     assets/fire.mp3 -> fire/bullet ki awaaz (jab bed wala
+     shoot kare, har shot pe 1 baar bajegi). File na ho to
+     game bina fire-awaaz ke chalega, koi error nahi aayega.
+     Udne wale chars ki awaaz ke liye (har face ki apni):
+       assets/voice1.mp3 -> fly1 ka dialogue ("Soja! Raat ho gayi hai!")
+       assets/voice2.mp3 -> fly2 ka dialogue ("Arre so ja na, subah uthna hai!")
+       assets/voice3.mp3 -> fly3 ka dialogue ("Ye dekho, abhi tak jaag raha hai!")
+       assets/voice4.mp3 -> fly4 ka dialogue ("Soja warna bhoot aa jayega!")
+       assets/voice5.mp3 -> fly5 ka dialogue ("Bas kar, phone rakh ke so ja!")
+     Jaise hi char screen pe dikhega, uski awaaz chaalu ho jayegi.
+  6. VS Code me index.html kholo -> right-click -> "Open
+     with Live Server" (ya file ko browser me kholo).
+     IMPORTANT: file ko seedha double-click karke khologe to
+     bhi game chalega, lekin photo load karne ke liye Live
+     Server / local server best hai.
+
+  FACES CONFIG — sirf yahin badlo, aur kahin naam mat badlo:
+  ============================================================
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #ebe5ea;
+    font-family: sans-serif; -webkit-user-select: none; user-select: none; }
+  #c { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: crosshair; }
+  .hud { position: fixed; top: 14px; width: 52px; height: 52px; border: none; border-radius: 50%;
+    background: rgba(0,0,0,0.55); color: #fff; font-size: 22px; cursor: pointer; z-index: 10; }
+  #btnClose { left: 14px; }
+  #btnPause { right: 14px; }
+  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; background: rgba(235,229,234,0.92); z-index: 20; text-align: center; padding: 24px; }
+  .overlay h1 { color: #d33; font-size: 30px; }
+  .overlay p { color: #333; font-size: 15px; line-height: 1.6; max-width: 420px; }
+  .overlay button { padding: 14px 44px; font-size: 18px; font-weight: bold; border: none; border-radius: 999px;
+    background: #111; color: #fff; cursor: pointer; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button class="hud" id="btnClose" title="Close">✕</button>
+<button class="hud" id="btnPause" title="Pause">⏸</button>
+
+<div class="overlay" id="startScreen">
+  <h1>Bed Shooter</h1>
+  <p>Upar se udta character bolega "soja, raat ho gayi hai" — wo tera mazak banane aaya hai!<br>
+  Centre me aake wo left-right flip karke tujhe chidhayega, phir bhaag jayega — usse pehle hi shoot kar!<br>
+  Cursor / ungli ko us par le jao — pointer wahi aayega.<br>
+  Bed wala apni penny se shoot karega — haath se upar-neeche karte hue nishana lagayega.<br>
+  Dotted line penny se pointer se hote hue poori screen tak jayegi.<br>
+  <b>Press karo aur hold karo, phir haath hatao — FIRE!</b><br>
+  Hit = +1 point. Udta character 1 round gol ghum ke neeche girega.</p>
+  <button id="btnPlay">▶ &nbsp;PLAY</button>
+</div>
+
+<div class="overlay hidden" id="pauseScreen">
+  <h1>Paused</h1>
+  <button id="btnResume">▶ &nbsp;RESUME</button>
+</div>
+
+<script>
+'use strict';
+/* ================= FACES — SIRF YAHIN NAAM BADLO ================= */
+const BED_FACE_FILE = 'assets/bed.png';          // bed wala — 1 photo
+const FLY_FACE_FILES = [                          // udne wale — 5 alag faces, randomly aayenge
+  'assets/fly1.png',
+  'assets/fly2.png',
+  'assets/fly3.png',
+  'assets/fly4.png'
+];
+const HIT_SOUND_FILE = 'assets/hit.mp3';          // bed wale ki hit voice (optional)
+const FIRE_SOUND_FILE = 'assets/fire.mp3';         // fire/bullet ki awaaz — jab bed wala shoot kare (optional)
+/* ================= VOICES — HAR UDTE CHAR KI APNI AWAAZ ================= */
+const FLY_VOICE_FILES = [                          // har face ki APNI awaaz (dialogue)
+  'assets/voice1.mp3',  // fly1 ki awaaz
+  'assets/voice2.mp3',  // fly2 ki awaaz
+  'assets/voice3.mp3',  // fly3 ki awaaz
+  'assets/voice4.mp3'  // fly4 ki awaaz
+];
+/* Har udte char ka apna dialogue — sirf REFERENCE ke liye likha hai, screen pe
+   text NAHI aayega, sirf awaaz bajegi. Apni recording inhi naam se daalo:
+   1: "Soja! Raat ho gayi hai!"
+   2: "Arre so ja na, subah uthna hai!"
+   3: "Ye dekho, abhi tak jaag raha hai!"
+   4: "Soja warna bhoot aa jayega!"
+   5: "Bas kar, phone rakh ke so ja!" */
+const DIALOGUES = [
+  'Soja! Raat ho gayi hai!',
+  'Arre so ja na, subah uthna hai!',
+  'Ye dekho, abhi tak jaag raha hai!',
+  'Soja warna bhoot aa jayega!',
+  'Bas kar, phone rakh ke so ja!'
+];
+/* =================================================================== */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const AIM_MODE = 'point';           // point = pointer bilkul cursor/ungli pe
+const FLY_SPEED = [0.0030, 0.0042];
+const GRAVITY = 0.00028;
+const RESPAWN_FRAMES = 70;
+const SPIN_TURNS = 1;               // hit ke baad girte hue kitne round ghumega = 1 poora round
+const TAUNT_FRAMES = 110;           // centre me kitni der mazak banayega = ~1.8 sec
+/* HIT TARGET — HEAD + TORSO + HAATH-PAIR (poora dikhta body, kahi bhi lage to OUT).
+   Pehle HIT_TOL = 6 tha aur sirf head+torso count hote the — bahut tight.
+   Problem: flame ko char tak pahunchne me ~17 frame lagte hain, aur tab tak
+   char taunt me hil-dul ke (~40U) apni jagah se hat jata hai — nishana sahi
+   lagane pe bhi flame sir ke bagal se nikal jata tha (test: taunt 57%).
+   FIX: (1) flame TEZ 22U -> 30U/frame; (2) HEAD_TOL = 14, TORSO_TOL = 12.
+   Phir Syed ne bola: sirf head pe lagne se out hota hai, BODY pe bhi hona
+   chahiye — isliye haath-pair ki lakeerein bhi count hoti hain, lekin TIGHT
+   tolerance (LIMB_TOL = 10) se — flame ko lakeer ko ASLI me chhoona padega.
+   Purana random-sound bug 26U halo ki wajah se tha (flame pair ke paas se
+   guzarte hi bina dikhe hit ho jata tha); 10U pe sirf dikhta hua touch hi hit hai. */
+const HEAD_TOL = 14;
+const TORSO_TOL = 12;
+const LIMB_TOL = 10;
+const FLY_Y_MIN = 0.14;             // udne wale kitne upar: 0.14 = screen ke upar se 14% neeche
+const FLY_Y_RANGE = 0.09;           // upar-neeche random range (14% se 23% tak)
+let W, H, U;
+const bed = { x: 0, y: 0 };
+let started = false, paused = false;
+
+function resize() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+  W = canvas.width; H = canvas.height;
+  U = Math.min(H / 1000, W / 480);
+  bed.x = W * 0.5; bed.y = H * 0.78;
+}
+resize();
+addEventListener('resize', resize);
+
+function loadImg(src) { const i = new Image(); i.src = src; return i; }
+const bedFace = loadImg(BED_FACE_FILE);
+const flyFaces = FLY_FACE_FILES.map(loadImg);
+const fallbackColors = ['#d9a577', '#c68642', '#8d5524', '#f1c27d', '#e0ac69'];
+const hitSound = new Audio(HIT_SOUND_FILE);
+function playHit() { try { hitSound.currentTime = 0; hitSound.play().catch(() => {}); } catch (e) {} }
+const fireSound = new Audio(FIRE_SOUND_FILE);
+function playFire() { try { fireSound.currentTime = 0; fireSound.play().catch(() => {}); } catch (e) {} }
+const flyVoices = FLY_VOICE_FILES.map(s => new Audio(s));
+let currentVoice = null;
+/* Udte char ki awaaz — jaise hi screen pe dikhega, uska dialogue shuru hoga */
+function playFlyerVoice(i) {
+  stopFlyerVoice();
+  try { const a = flyVoices[i]; currentVoice = a; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+}
+/* Awaaz band — char out ho gaya ya bhaag gaya, to uska dialogue bhi rukega */
+function stopFlyerVoice() {
+  try { if (currentVoice) { currentVoice.pause(); currentVoice.currentTime = 0; } } catch (e) {}
+  currentVoice = null;
+}
+
+let enemy = null, respawnTimer = 0, score = 0, best = 0, lastFaceIdx = -1;
+/* NO REPEAT — har baar pichle wale se ALAG character aayega.
+   Pure random me ek hi char 3-4 baar aa jata tha; ab last wale ko
+   list se hata ke pick hota hai, to kabhi do baar lagatar same face nahi aayega. */
+function pickFaceIdx() {
+  let idx;
+  do { idx = Math.floor(Math.random() * flyFaces.length); }
+  while (flyFaces.length > 1 && idx === lastFaceIdx);
+  lastFaceIdx = idx;
+  return idx;
+}
+try { best = Number(localStorage.getItem('best')) || 0; } catch (e) {}
+let frame = 0, bedShake = 0, gunKick = 0;
+const ragdolls = [], particles = [], rings = [], popups = [];
+const flames = [], smoke = [], fireShots = []; // fireShots = penny se nikli aag ki jeebh, aim ki taraf upar jayegi
+let muzzleFlash = null;
+/* aim.px / aim.py = pointer ki EXACT position (cursor/ungli, 1:1, koi lag nahi) */
+const aim = { active: false, hasPointer: false, px: 0, py: 0, angle: -Math.PI / 2, smoothAngle: -Math.PI / 2 };
+
+const FLY = {
+  sh: [-10, 44], hip: [-24, 58],
+  arm1: [[40, 29], [60, 10]], arm2: [[-45, 53], [-74, 59]],
+  leg1: [[-51, 73], [-95, 89]], leg2: [[-51, 91], [-80, 104]]
+};
+const SPLAY = {
+  sh: [-4, 44], hip: [10, 64],
+  arm1: [[30, 30], [54, 8]], arm2: [[-40, 50], [-78, 40]],
+  leg1: [[40, 84], [66, 100]], leg2: [[-24, 88], [-46, 112]]
+};
+const FACE_RX = 29, FACE_RY = 42;
+
+function sway(base, t, ph) {
+  const o = (i, a) => [Math.sin(t / 16 + ph + i) * a, Math.cos(t / 19 + ph + i * 1.3) * a];
+  const add = (p, i, a) => { const d = o(i, a); return [p[0] + d[0], p[1] + d[1]]; };
+  return { sh: base.sh, hip: base.hip,
+    arm1: [add(base.arm1[0], 1, 3), add(base.arm1[1], 2, 5)],
+    arm2: [add(base.arm2[0], 3, 3), add(base.arm2[1], 4, 5)],
+    leg1: [add(base.leg1[0], 5, 3), add(base.leg1[1], 6, 5)],
+    leg2: [add(base.leg2[0], 7, 3), add(base.leg2[1], 8, 5)] };
+}
+function makeFigure(pose, dir) {
+  const f = p => ({ x: p[0] * dir * U, y: p[1] * U });
+  const sh = f(pose.sh), hip = f(pose.hip);
+  const a1 = pose.arm1.map(f), a2 = pose.arm2.map(f);
+  const l1 = pose.leg1.map(f), l2 = pose.leg2.map(f);
+  return { segs: [[sh, hip], [sh, a1[0], a1[1]], [sh, a2[0], a2[1]], [hip, l1[0], l1[1]], [hip, l2[0], l2[1]]],
+    hands: [a1, a2], feet: [l1, l2] };
+}
+/* Cartoon fallback face — sirf tab dikhega jab photo file na mile.
+   kind 0-4 = fly1-5 ke alag-alag look, 'bed' = bed wala (chashma). */
+function drawCartoonFace(rx, ry, kind) {
+  ctx.fillStyle = '#d9a577'; ctx.fillRect(-rx, -ry, rx * 2, ry * 2);
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(-rx * 0.38, -ry * 0.15, rx * 0.09, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(rx * 0.38, -ry * 0.15, rx * 0.09, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 2 * U; ctx.beginPath();
+  ctx.arc(0, ry * 0.15, rx * 0.35, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  if (kind === 'bed') { // chashma
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 2.5 * U;
+    [-1, 1].forEach(s => { ctx.beginPath(); ctx.arc(s * rx * 0.38, -ry * 0.15, rx * 0.22, 0, Math.PI * 2); ctx.stroke(); });
+    ctx.beginPath(); ctx.moveTo(-rx * 0.16, -ry * 0.15); ctx.lineTo(rx * 0.16, -ry * 0.15); ctx.stroke();
+  } else if (kind === 0) { // daadhi
+    ctx.fillStyle = '#5a3a1a'; ctx.beginPath();
+    ctx.ellipse(0, ry * 0.55, rx * 0.75, ry * 0.45, 0, 0, Math.PI); ctx.fill();
+  } else if (kind === 1) { // spiky baal
+    ctx.fillStyle = '#111';
+    for (let i = -2; i <= 2; i++) { ctx.beginPath();
+      ctx.moveTo(i * rx * 0.32 - rx * 0.14, -ry * 0.75); ctx.lineTo(i * rx * 0.32, -ry * 1.25); ctx.lineTo(i * rx * 0.32 + rx * 0.14, -ry * 0.75);
+      ctx.closePath(); ctx.fill(); }
+  } else if (kind === 2) { // moonchh
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(0, ry * 0.28, rx * 0.4, ry * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (kind === 3) { // curly baal
+    ctx.fillStyle = '#222';
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(i * rx * 0.32, -ry * 0.8, rx * 0.2, 0, Math.PI * 2); ctx.fill(); }
+  } else if (kind === 4) { // bald + goatee
+    ctx.fillStyle = '#eee'; ctx.beginPath(); ctx.ellipse(0, ry * 0.72, rx * 0.3, ry * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawFaceEllipse(img, rx, ry, fallback, tint, tilt, kind) {
+  ctx.save(); ctx.rotate(tilt || 0);
+  ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); ctx.clip();
+  if (img && img.complete && img.naturalWidth > 0) {
+    const ar = rx / ry; let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+    if (sw / sh > ar) { const nw = sh * ar; sx = (sw - nw) / 2; sw = nw; }
+    else { const nh = sw / ar; sy = (sh - nh) / 2; sh = nh; }
+    ctx.drawImage(img, sx, sy, sw, sh, -rx, -ry, rx * 2, ry * 2);
+  } else { drawCartoonFace(rx, ry, kind); }
+  if (tint > 0) { ctx.fillStyle = 'rgba(225,45,35,' + tint + ')'; ctx.fillRect(-rx, -ry, rx * 2, ry * 2); }
+  ctx.restore();
+}
+function drawFigure(fig, faceImg, fallback, tint, faceTilt, shakeLines, t, kind) {
+  ctx.save();
+  ctx.strokeStyle = '#111'; ctx.fillStyle = '#111'; ctx.lineWidth = 6 * U; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  fig.segs.forEach(seg => { ctx.beginPath(); ctx.moveTo(seg[0].x, seg[0].y);
+    for (let i = 1; i < seg.length; i++) ctx.lineTo(seg[i].x, seg[i].y); ctx.stroke(); });
+  fig.hands.forEach(h => { const p = h[1]; ctx.beginPath(); ctx.arc(p.x, p.y, 9 * U, 0, Math.PI * 2); ctx.fill(); });
+  fig.feet.forEach(l => { const p = l[1], q = l[0]; const a = Math.atan2(p.y - q.y, p.x - q.x);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 11 * U, 7.5 * U, a, 0, Math.PI * 2); ctx.fill(); });
+  if (shakeLines && t % 8 < 5) { ctx.strokeStyle = '#555'; ctx.lineWidth = 1.8 * U;
+    fig.hands.concat(fig.feet).forEach(l => { const p = l[1], q = l[0]; const a = Math.atan2(p.y - q.y, p.x - q.x);
+      [15, 20].forEach(r => { ctx.beginPath(); ctx.arc(p.x, p.y, r * U, a - 0.5, a + 0.5); ctx.stroke(); }); }); }
+  ctx.restore();
+  /* Face ko body se CONNECT karne ke liye 8U neeche (kandhe ki taraf) shift —
+     face oval ab gardan/kandhe ke upar overlap karega, latka hua nahi lagega. */
+  ctx.save(); ctx.translate(0, 8 * U);
+  drawFaceEllipse(faceImg, FACE_RX * U, FACE_RY * U, fallback, tint, faceTilt, kind);
+  ctx.restore();
+}
+function spawnEnemy() {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  enemy = { dir, x: dir === 1 ? -160 * U : W + 160 * U,
+    y0: H * (FLY_Y_MIN + Math.random() * FLY_Y_RANGE), y: 0,
+    speed: W * (FLY_SPEED[0] + Math.random() * (FLY_SPEED[1] - FLY_SPEED[0])),
+    phase: Math.random() * 10,
+    faceIdx: pickFaceIdx(), // 5 faces me se random ek — pichle wale se hamesha alag
+    fig: null,
+    /* TAUNT behaviour: enter (kinare se centre) -> taunt (centre me mazak)
+       -> escape (destination ki taraf bhaag ke bachna) */
+    mode: 'enter', dispDir: dir, tauntT: 0, tauntX: 0, voiceStarted: false };
+}
+function updateEnemy() {
+  const e = enemy;
+  if (e.mode === 'enter') {
+    /* Kinare se ud ke centre ki taraf aa raha hai, apna dialogue bolte hue */
+    e.x += e.speed * e.dir;
+    e.dispDir = e.dir;
+    if ((e.dir === 1 && e.x >= W * 0.5) || (e.dir === -1 && e.x <= W * 0.5)) {
+      e.mode = 'taunt'; e.tauntT = 0; e.tauntX = e.x; // centre pahunch gaya — ab mazak shuru
+    }
+  } else if (e.mode === 'taunt') {
+    e.tauntT++;
+    /* MAZAK — left-right FLIP: har ~18 frame (0.3 sec) me palat jayega */
+    e.dispDir = (Math.floor(e.tauntT / 18) % 2 === 0) ? e.dir : -e.dir;
+    /* Sirf jagah pe flip NAHI — aage-peeche hilte hue, destination ki taraf
+       dheere-dheere badhta hua (drift + side-to-side wiggle) */
+    e.x = e.tauntX + e.speed * e.dir * 0.35 * e.tauntT + Math.sin(e.tauntT / 14) * 30 * U;
+    if (e.tauntT >= TAUNT_FRAMES) e.mode = 'escape';
+  } else {
+    /* ESCAPE — mazak khatam, ab bachne ke liye tez bhaag raha hai */
+    e.x += e.speed * e.dir * 1.15;
+    e.dispDir = e.dir;
+  }
+  e.y = e.y0 + Math.sin(frame / 40 + e.phase) * 16 * U + Math.sin(frame / 120 + e.phase * 1.7) * 20 * U;
+  e.fig = makeFigure(sway(FLY, frame, e.phase), e.dispDir);
+  /* Voice: jaise hi screen pe dikha, uska dialogue chaalu ho jayega */
+  if (!e.voiceStarted && e.x > 0 && e.x < W) { e.voiceStarted = true; playFlyerVoice(e.faceIdx); }
+  const gone = (e.dir === 1 && e.x > W + 170 * U) || (e.dir === -1 && e.x < -170 * U);
+  if (gone) { stopFlyerVoice(); enemy = null; }
+}
+/* Gun HATA di — bed wala ab apni penny se shoot karta hai.
+   pennyBase = kambal ke beech me, jahan se penny nikalti hai.
+   pennyTip(angle) = penny ka sir — wahin se fire hoga, wahin se dotted line shuru hogi. */
+function pennyBase() { const q = bp(700, 285); return { x: q[0], y: q[1] }; }
+function pennyLen() { return 28 * U - gunKick; } // CHHOTI kar di — pehle 42 thi, ab 28 (fire pe gunKick se thodi peeche hoti hai)
+function pennyTip(a) { const b = pennyBase();
+  return { x: b.x + Math.cos(a) * pennyLen(), y: b.y + Math.sin(a) * pennyLen() }; }
+function muzzle() { return pennyTip(aim.angle); }
+function distPtSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  let t = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function rayLength(ox, oy, dx, dy) {
+  const tx = dx > 0 ? (W - ox) / dx : dx < 0 ? -ox / dx : Infinity;
+  const ty = dy > 0 ? (H - oy) / dy : dy < 0 ? -oy / dy : Infinity;
+  return Math.min(tx, ty);
+}
+function lerpAngle(a, b, k) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * k;
+}
+function clampUp(a) {
+  if (a >= -0.15 && a <= Math.PI / 2) return -0.15;
+  if (a > Math.PI / 2 || a <= -Math.PI + 0.15) return -Math.PI + 0.15;
+  return a;
+}
+function setPointer(x, y) {
+  const m = Math.max(24, 22 * U); // pointer screen ke andar hi rahe, kabhi cut na ho
+  aim.px = Math.max(m, Math.min(W - m, x));
+  aim.py = Math.max(m, Math.min(H - m, y));
+  aim.hasPointer = true;
+  const mz = pennyBase(); // angle penny ke base se banta hai (tip angle se badalta rehta, isliye base use hota hai)
+  aim.angle = clampUp(Math.atan2(aim.py - mz.y, aim.px - mz.x));
+}
+function fire() {
+  playFire(); // SHOOT ki awaaz — bilkul usi pal jab haath hata ke fire kiya (har shot pe 1 baar)
+  const m = muzzle(), dx = Math.cos(aim.angle), dy = Math.sin(aim.angle);
+  const tmax = rayLength(m.x, m.y, dx, dy);
+  /* NO hitscan — fire karte waqt turant hit NAHI hoga. Fire ball hi ASLI GOLI hai:
+     woh ud ke jayegi aur jahan character ko chhooegi, WAHI out hoga. Isse pehle kuch nahi girega. */
+  /* FIRE animation — goli ki line NAHI, penny ke sir pe aag ka flash + chingari + dhuaan */
+  muzzleFlash = { x: m.x, y: m.y, angle: aim.angle, life: 13, max: 13 };
+  for (let i = 0; i < 8; i++) { const a = aim.angle + (Math.random() - 0.5) * 0.9, sp = (2 + Math.random() * 4) * U;
+    flames.push({ x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: 12 + Math.random() * 10, r: (2 + Math.random() * 3) * U,
+      color: ['#ffdd33', '#ff9933', '#ff5500'][Math.floor(Math.random() * 3)] }); }
+  for (let i = 0; i < 4; i++) smoke.push({ x: m.x + dx * 4 * U, y: m.y + dy * 4 * U,
+    vx: (Math.random() - 0.5) * U, vy: -0.6 * U, life: 40, r: 5 * U });
+  /* Travelling flame — goli ki jagah aag ki jeebh penny se nikal ke aim ki taraf
+     screen ke upar tak jayegi, HIT ho ya MISS — har fire pe ek flame jayegi */
+  fireShots.push({ x: m.x, y: m.y, dx, dy, travelled: 0, maxDist: tmax, speed: 30 * U }); // 30U/frame — tez flame, char ke drift karne se pehle pahunchegi
+  gunKick = 4; bedShake = 28;
+}
+function knockOut(hx, hy) {
+  const e = enemy;
+  ragdolls.push({ x: e.x, y: e.y, vx: e.speed * e.dir * 0.25, vy: 0, t: 0, hold: 0,
+    alpha: 1, dir: e.dir, faceIdx: e.faceIdx, fig: makeFigure(SPLAY, e.dir),
+    startY: e.y, rot: 0 }); // rot = girte hue 1 poora round
+    /* hold: 0 — girna USI PAL shuru hoga jab goli lagegi. Pehle hold: 6 tha,
+       to char 6 frame (~100ms) hawa me ruka rehta tha aur phir girta tha —
+       isiliye awaaz girne ke time pe lagti thi, goli lagne ke time pe nahi. */
+  rings.push({ x: hx, y: hy, life: 14 });
+  popups.push({ x: e.x + 30 * U, y: e.y - 55 * U, life: 55 });
+  const colors = ['#777', '#999', '#d9534f', '#f0a050', '#e8b88a', '#333'];
+  for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, sp = (0.5 + Math.random() * 3) * U * 1.6;
+    particles.push({ x: hx, y: hy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      life: 40 + Math.random() * 25, r: (1.5 + Math.random() * 2.2) * U,
+      color: colors[Math.floor(Math.random() * colors.length)] }); }
+  enemy = null; respawnTimer = 0; score++;
+  if (score > best) { best = score; try { localStorage.setItem('best', best); } catch (e2) {} }
+  stopFlyerVoice(); // udte char ka dialogue band — ab bed wale ki awaaz aayegi
+  /* playHit() yahan NAHI bajti — woh collision wale frame me pehle hi baj
+     chuki hai, bilkul usi pal jab goli char ko lagi (neeche dekho). */
+}
+function update() {
+  frame++;
+  aim.smoothAngle = lerpAngle(aim.smoothAngle, aim.angle, 0.22); // gun smoothly ghumega, pointer instant rahega
+  if (gunKick > 0) gunKick *= 0.8;
+  if (!enemy) { respawnTimer++; if (respawnTimer > RESPAWN_FRAMES) { spawnEnemy(); respawnTimer = 0; } }
+  if (enemy) updateEnemy();
+  const fadeY = bed.y - 200 * U;
+  for (let i = ragdolls.length - 1; i >= 0; i--) {
+    const r = ragdolls[i]; r.t++;
+    if (r.t > r.hold) {
+      r.vy += GRAVITY * H; r.y += r.vy; r.x += r.vx; r.vx *= 0.99;
+      /* 1 POORA ROUND: girte hue fade hone tak exactly 360° ghumega */
+      const p = Math.max(0, Math.min(1, (r.y - r.startY) / Math.max(1, fadeY - r.startY)));
+      r.rot = r.dir * Math.PI * 2 * SPIN_TURNS * p;
+    }
+    if (r.y > fadeY) r.alpha -= 0.07;
+    if (r.alpha <= 0 || r.y > H + 200 * U) ragdolls.splice(i, 1);
+  }
+  for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vx *= 0.94; p.vy = p.vy * 0.94 + 0.05 * U; if (--p.life <= 0) particles.splice(i, 1); }
+  for (let i = flames.length - 1; i >= 0; i--) { const p = flames[i];
+    p.x += p.vx; p.y += p.vy; p.vx *= 0.9; p.vy *= 0.9; if (--p.life <= 0) flames.splice(i, 1); }
+  for (let i = fireShots.length - 1; i >= 0; i--) { const s = fireShots[i];
+    /* Edge pe EXACT rukegi — kabhi screen ke bahar nahi jayegi (step ko edge tak hi kaata) */
+    const step = Math.min(s.speed, Math.max(0, s.maxDist - s.travelled));
+    s.x += s.dx * step; s.y += s.dy * step; s.travelled += step;
+    if (Math.random() < 0.6) flames.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * U,
+      vy: (Math.random() - 0.5) * U, life: 10, r: 2 * U, color: '#ff9933' }); // peeche chingaariyan
+    /* FLAME COLLISION — hit tab jab flame character ke HEAD, TORSO ya
+       HAATH-PAIR (poora dikhta body) ko chhoo le. Haath-pair ki lakeerein
+       TIGHT tolerance (LIMB_TOL = 10) se check hoti hain — flame ko lakeer
+       ko asli me chhoona padega, paas se guzarna kaafi nahi (pehle 26U halo
+       ki wajah se flame pair ke paas se guzarte hi bina dikhe hit ho jata
+       tha, isiliye hit.mp3 randomly bajta lagta tha). Har frame flame 30U
+       aage badhta hai, to uske raaste ke 3 points check hote hain (pichla,
+       beech, current) — taaki flame body ke beech se bina chhue nikal na
+       jaye. Ab: dikhega tabhi girega, girega tabhi awaaz aayegi. */
+    if (enemy && enemy.fig) {
+      const px = s.x - s.dx * step, py = s.y - s.dy * step; // step se pehle ki position
+      const torso = enemy.fig.segs[0]; // sirf kandha-kamar wali lakeer
+      let hit = false;
+      for (let k = 0; k <= 2 && !hit; k++) {
+        /* +12U aage — flame ki jeebh ka sir (tip) centre se 16U aage hota hai,
+           to hit usi pal register hogi jab dikhta hua sir char ko chhooega,
+           centre ke pahunchne ka wait nahi hoga. */
+        const qx = px + (s.x - px) * k / 2 + s.dx * 12 * U, qy = py + (s.y - py) * k / 2 + s.dy * 12 * U;
+        const ex = (qx - enemy.x) / ((FACE_RX + HEAD_TOL) * U), ey = (qy - (enemy.y + 8 * U)) / ((FACE_RY + HEAD_TOL) * U);
+        if (ex * ex + ey * ey <= 1) { hit = true; break; }
+        if (distPtSeg(qx, qy, enemy.x + torso[0].x, enemy.y + torso[0].y,
+            enemy.x + torso[1].x, enemy.y + torso[1].y) <= TORSO_TOL * U) { hit = true; break; }
+        /* HAATH-PAIR — body ka dikhta hissa, kahi bhi lage to OUT.
+           segs[1..4] = 2 haath + 2 pair (har ek 3-point wali lakeer).
+           LIMB_TOL = 10 (tight) — flame ko lakeer ko asli me chhoona padega,
+           paas se guzarna kaafi nahi. */
+        for (let s = 1; s < enemy.fig.segs.length && !hit; s++) {
+          const seg = enemy.fig.segs[s];
+          for (let j = 0; j < seg.length - 1 && !hit; j++) {
+            if (distPtSeg(qx, qy, enemy.x + seg[j].x, enemy.y + seg[j].y,
+                enemy.x + seg[j + 1].x, enemy.y + seg[j + 1].y) <= LIMB_TOL * U) { hit = true; break; }
+          }
+        }
+      }
+      /* HIT — awaaz SABSE PEHLE, bilkul usi frame me jab goli char ko lagi.
+         Uske baad hi ragdoll banta hai — awaaz girne ka wait nahi karti. */
+      if (hit) { const hx = s.x, hy = s.y; fireShots.splice(i, 1); playHit(); knockOut(hx, hy); continue; }
+    }
+    if (s.travelled >= s.maxDist) fireShots.splice(i, 1); }
+  for (let i = smoke.length - 1; i >= 0; i--) { const p = smoke[i];
+    p.x += p.vx; p.y += p.vy; p.r += 0.3 * U; if (--p.life <= 0) smoke.splice(i, 1); }
+  if (muzzleFlash && --muzzleFlash.life <= 0) muzzleFlash = null;
+  for (let i = rings.length - 1; i >= 0; i--) if (--rings[i].life <= 0) rings.splice(i, 1);
+  for (let i = popups.length - 1; i >= 0; i--) { popups[i].y -= 0.25 * U; if (--popups[i].life <= 0) popups.splice(i, 1); }
+  if (bedShake > 0) bedShake--;
+}
+function bp(zx, zy) { return [bed.x + (zx - 687) * 0.585 * U, bed.y + (zy - 495) * 0.585 * U]; }
+function poly(pts, fill, stroke, lw) { ctx.beginPath();
+  pts.forEach((p, i) => { const q = bp(p[0], p[1]); if (i === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]); });
+  ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw * 0.585 * U; ctx.stroke(); } }
+function polyline(pts, color, lw) { ctx.beginPath();
+  pts.forEach((p, i) => { const q = bp(p[0], p[1]); if (i === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]); });
+  ctx.strokeStyle = color; ctx.lineWidth = lw * 0.585 * U; ctx.stroke(); }
+function dot(zx, zy, r) { const q = bp(zx, zy); ctx.beginPath(); ctx.arc(q[0], q[1], r * 0.585 * U, 0, Math.PI * 2); ctx.fill(); }
+function drawBed() {
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  polyline([[378, 432], [366, 180], [588, 72], [596, 198]], '#111', 14);
+  poly([[398, 212], [574, 128], [580, 240], [402, 330]], '#4a4a4a', '#111', 8);
+  polyline([[380, 378], [470, 392]], '#111', 9);
+  ctx.fillStyle = '#111';
+  poly([[376, 385], [418, 385], [416, 440], [380, 440]], '#111');
+  poly([[858, 460], [895, 455], [895, 497], [862, 497]], '#111');
+  poly([[975, 405], [1002, 400], [1000, 440], [978, 440]], '#111');
+  poly([[585, 240], [700, 213], [1012, 275], [897, 385], [555, 350]], '#9b9b9b', '#111', 7);
+  poly([[555, 350], [897, 385], [893, 448], [760, 455], [640, 430], [560, 412]], '#8c8c8c', '#111', 7);
+  poly([[897, 385], [1012, 275], [1008, 338], [942, 438], [893, 448]], '#7b7b7b', '#111', 7);
+  poly([[598, 222], [652, 188], [692, 208], [690, 252], [640, 300], [563, 352], [556, 418], [466, 410], [468, 330], [545, 305]], '#2f4a43', '#1c2e29', 4);
+  polyline([[600, 264], [716, 259]], '#111', 7);
+  polyline([[606, 270], [652, 322], [724, 292]], '#111', 7);
+  polyline([[724, 292], [910, 322]], '#111', 7);
+  polyline([[640, 280], [910, 352]], '#111', 7);
+  ctx.fillStyle = '#111'; dot(912, 322, 9); dot(912, 352, 9);
+  const f = bp(530, 210);
+  /* Bed wala: face ~52° tedha (lete hue, upar dekh raha) — sir ka upar wala
+     hissa takiye ki taraf, thuddi body ki taraf. Face ko thoda body ki taraf
+     bhi shift kiya, taaki gardan/kambal se connect lage, latka hua nahi. */
+  ctx.save(); ctx.translate(f[0] + 10 * U, f[1] + 8 * U);
+  const shake = bedShake > 0 ? Math.sin(bedShake * 1.3) * 0.12 * (bedShake / 28) : 0;
+  drawFaceEllipse(bedFace, 36 * U, 46 * U, '#d9a577', 0, -0.9 + shake, 'bed');
+  ctx.restore(); ctx.restore();
+}
+function drawPenis() {
+  const b = pennyBase(), a = aim.smoothAngle, len = pennyLen();
+  const tipX = b.x + Math.cos(a) * len, tipY = b.y + Math.sin(a) * len;
+  ctx.save(); ctx.lineCap = 'round';
+  // penny — aim ki taraf point karti hai, gun ki tarah smoothly ghumti hai (patli + chhoti)
+  ctx.strokeStyle = '#c98a5a'; ctx.lineWidth = 9 * U;
+  ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(tipX, tipY); ctx.stroke();
+  ctx.strokeStyle = '#e8b88a'; ctx.lineWidth = 6 * U;
+  ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(tipX, tipY); ctx.stroke();
+  ctx.fillStyle = '#e8b88a'; ctx.beginPath(); ctx.arc(tipX, tipY, 4.5 * U, 0, Math.PI * 2); ctx.fill();
+  // haath — penny ko pakad ke upar-neeche karta hai (press-hold karte hue tez, waise dheere)
+  const speed = aim.active ? 5 : 14;
+  const slide = 0.5 + 0.38 * Math.sin(frame / speed);
+  const hd = len * (0.30 + 0.45 * slide);
+  const hx = b.x + Math.cos(a) * hd, hy = b.y + Math.sin(a) * hd;
+  drawHand(hx, hy, a);
+  ctx.restore();
+}
+/* PROPER HAATH — ball nahi: mutthi (palm) + 4 ungliyan + angootha, penny ko pakdi hui */
+function drawHand(x, y, a) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.fillStyle = '#e8b88a'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2 * U;
+  ctx.beginPath(); ctx.ellipse(0, 0, 10 * U, 8 * U, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 1.8 * U; ctx.lineCap = 'round';
+  [-5, 0, 5].forEach(o => { ctx.beginPath(); ctx.moveTo(o * U, -8 * U); ctx.lineTo(o * U, 8 * U); ctx.stroke(); });
+  ctx.fillStyle = '#e8b88a'; ctx.beginPath(); ctx.ellipse(2 * U, -10 * U, 5 * U, 3.5 * U, 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#ebe5ea'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#222';
+  ctx.font = 'bold ' + 34 * U + 'px sans-serif'; ctx.fillText(score, W / 2, H * 0.1);
+  ctx.fillStyle = '#555'; ctx.font = 'bold ' + 14 * U + 'px sans-serif';
+  ctx.fillText('BEST ' + best, W / 2, H * 0.1 + 20 * U);
+  drawBed(); drawPenis();
+  if (enemy) { ctx.save(); ctx.translate(enemy.x, enemy.y);
+    /* Udta char: face udne ki direction me ~40° tedha, neeche ki taraf dekhta hua —
+       sir aage, thuddi body ki taraf, nazar bed wale pe. */
+    drawFigure(enemy.fig, flyFaces[enemy.faceIdx], fallbackColors[enemy.faceIdx % fallbackColors.length], 0, enemy.dispDir * 0.7, false, 0, enemy.faceIdx);
+    ctx.restore(); }
+  ragdolls.forEach(r => { ctx.save(); ctx.globalAlpha = Math.max(0, r.alpha); ctx.translate(r.x, r.y);
+    ctx.rotate(r.rot); // 1 poora round ghumta hua girega
+    const tint = Math.max(0, 0.4 - r.t / 120);
+    drawFigure(r.fig, flyFaces[r.faceIdx], fallbackColors[r.faceIdx % fallbackColors.length], tint, r.dir * 0.7, r.t < 90, r.t, r.faceIdx);
+    ctx.restore(); });
+  particles.forEach(p => { ctx.globalAlpha = Math.min(1, p.life / 25); ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); });
+  ctx.globalAlpha = 1;
+  rings.forEach(r => { const k = 1 - r.life / 14; ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#f0a050';
+    ctx.lineWidth = 2 * U; ctx.beginPath(); ctx.arc(r.x, r.y, (12 + k * 48) * U, 0, Math.PI * 2); ctx.stroke(); });
+  ctx.globalAlpha = 1;
+  popups.forEach(p => { ctx.globalAlpha = Math.min(1, p.life / 20); ctx.fillStyle = '#8a7f84';
+    ctx.font = 'bold ' + 22 * U + 'px sans-serif'; ctx.fillText('+1', p.x, p.y); });
+  ctx.globalAlpha = 1;
+  /* Dotted aim line: SIRF press-hold karte hue — penny ke sir se pointer se hote hue FULL SCREEN (edge tak) */
+  if (started && !paused && aim.active && aim.hasPointer) {
+    const m = muzzle(), dx = Math.cos(aim.angle), dy = Math.sin(aim.angle);
+    const tipX = m.x, tipY = m.y; // m hi penny ka sir hai, line wahin se shuru hogi
+    const L = rayLength(tipX, tipY, dx, dy);
+    ctx.save(); ctx.setLineDash([10 * U, 8 * U]); ctx.strokeStyle = '#222'; ctx.lineWidth = 1.8 * U;
+    ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(tipX + dx * L, tipY + dy * L); ctx.stroke(); ctx.restore();
+    /* Crosshair — EXACTLY cursor/ungli pe, line ke beech me */
+    ctx.save(); ctx.strokeStyle = '#111'; ctx.lineWidth = 2.5 * U;
+    ctx.beginPath(); ctx.arc(aim.px, aim.py, 12 * U, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(aim.px - 18 * U, aim.py); ctx.lineTo(aim.px - 6 * U, aim.py);
+    ctx.moveTo(aim.px + 6 * U, aim.py); ctx.lineTo(aim.px + 18 * U, aim.py);
+    ctx.moveTo(aim.px, aim.py - 18 * U); ctx.lineTo(aim.px, aim.py - 6 * U);
+    ctx.moveTo(aim.px, aim.py + 6 * U); ctx.lineTo(aim.px, aim.py + 18 * U); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(aim.px, aim.py, 2.5 * U, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  /* Muzzle fire flash */
+  if (muzzleFlash) { const k = muzzleFlash.life / muzzleFlash.max;
+    ctx.save(); ctx.globalAlpha = k; ctx.translate(muzzleFlash.x, muzzleFlash.y); ctx.rotate(muzzleFlash.angle);
+    ctx.fillStyle = '#ffdd33'; ctx.beginPath(); ctx.ellipse(0, 0, 26 * U * k + 8 * U, 12 * U, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff7700'; ctx.beginPath(); ctx.ellipse(6 * U, 0, 18 * U * k + 5 * U, 8 * U, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1; }
+  flames.forEach(p => { ctx.globalAlpha = Math.min(1, p.life / 12); ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); });
+  /* Travelling flame — aag ki jeebh, aage ki taraf point karti hui, flicker ke saath.
+     Edge ke paas fade ho jayegi, taaki uska aage wala hissa screen se bahar na dikhe. */
+  fireShots.forEach(s => { const flick = 1 + Math.sin(frame * 0.9 + s.travelled * 0.05) * 0.25;
+    const edgeFade = Math.max(0.15, Math.min(1, (s.maxDist - s.travelled) / 50));
+    ctx.save(); ctx.globalAlpha = edgeFade; ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.dy, s.dx));
+    ctx.fillStyle = '#ff5500';
+    ctx.beginPath(); ctx.moveTo(16 * U * flick, 0);
+    ctx.quadraticCurveTo(0, -10 * U, -12 * U, 0); ctx.quadraticCurveTo(0, 10 * U, 16 * U * flick, 0); ctx.fill();
+    ctx.fillStyle = '#ffdd33';
+    ctx.beginPath(); ctx.moveTo(10 * U * flick, 0);
+    ctx.quadraticCurveTo(0, -5 * U, -7 * U, 0); ctx.quadraticCurveTo(0, 5 * U, 10 * U * flick, 0); ctx.fill();
+    ctx.restore(); });
+  ctx.globalAlpha = 1;
+  smoke.forEach(p => { ctx.globalAlpha = Math.max(0, p.life / 40) * 0.35; ctx.fillStyle = '#999';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); });
+  ctx.globalAlpha = 1;
+}
+let last = performance.now(), acc = 0;
+function loop(now) {
+  acc += Math.min(100, now - last); last = now;
+  while (acc >= 1000 / 60) { if (started && !paused) update(); acc -= 1000 / 60; }
+  draw(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* Pointer SIRF press-hold karte hue dikhega — bina press ke mouse ghumane pe kuch nahi aayega.
+   Press-hold = nishana, haath hataya / mouse chhoda = FIRE. */
+canvas.addEventListener('pointerdown', e => {
+  if (!started || paused) return;
+  aim.active = true; setPointer(e.clientX, e.clientY);
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+});
+canvas.addEventListener('pointermove', e => { if (aim.active && started && !paused) setPointer(e.clientX, e.clientY); });
+function endAim(fireShot) {
+  if (!aim.active) return; aim.active = false; aim.hasPointer = false; // haath hatate hi pointer + line gayab
+  if (fireShot) fire();
+}
+canvas.addEventListener('pointerup', e => { endAim(true); });
+canvas.addEventListener('pointercancel', () => { aim.active = false; aim.hasPointer = false; });
+
+const startScreen = document.getElementById('startScreen');
+const pauseScreen = document.getElementById('pauseScreen');
+document.getElementById('btnPlay').addEventListener('click', () => {
+  started = true; paused = false; startScreen.classList.add('hidden'); pauseScreen.classList.add('hidden');
+  aim.active = false; aim.hasPointer = false; // PLAY karte hi pointer NAHI — pehle press karo, tab aayega
+});
+document.getElementById('btnResume').addEventListener('click', () => {
+  paused = false; pauseScreen.classList.add('hidden');
+});
+document.getElementById('btnPause').addEventListener('click', () => {
+  if (!started) return; paused = !paused; pauseScreen.classList.toggle('hidden', !paused);
+});
+document.getElementById('btnClose').addEventListener('click', () => {
+  started = false; paused = false; aim.active = false;
+  startScreen.classList.remove('hidden'); pauseScreen.classList.add('hidden');
+});
+addEventListener('keydown', e => { if (e.key === 'Escape' && started) { paused = !paused; pauseScreen.classList.toggle('hidden', !paused); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && started && !paused) { paused = true; pauseScreen.classList.remove('hidden'); }
+});
+</script>
+</body>
+</html>
