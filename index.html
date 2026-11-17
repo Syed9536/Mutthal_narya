@@ -76,7 +76,7 @@
 
 <div class="overlay" id="startScreen">
   <h1>Mutthal Narya</h1>
-  <p>Soja Mutthal Narya Soja</p>
+  <p>Are Soja Narya Soja.</p>
   <button id="btnPlay">▶ &nbsp;PLAY</button>
 </div>
 
@@ -93,7 +93,8 @@ const FLY_FACE_FILES = [                          // udne wale — 5 alag faces,
   'assets/fly1.png',
   'assets/fly2.png',
   'assets/fly3.png',
-  'assets/fly4.png'
+  'assets/fly4.png',
+  'assets/fly5.png'
 ];
 const HIT_SOUND_FILE = 'assets/hit.mp3';          // bed wale ki hit voice (optional)
 const FIRE_SOUND_FILE = 'assets/fire.mp3';         // fire/bullet ki awaaz — jab bed wala shoot kare (optional)
@@ -102,7 +103,8 @@ const FLY_VOICE_FILES = [                          // har face ki APNI awaaz (di
   'assets/voice1.mp3',  // fly1 ki awaaz
   'assets/voice2.mp3',  // fly2 ki awaaz
   'assets/voice3.mp3',  // fly3 ki awaaz
-  'assets/voice4.mp3'  // fly4 ki awaaz
+  'assets/voice4.mp3',  // fly4 ki awaaz
+  'assets/voice5.mp3'   // fly5 ki awaaz
 ];
 /* Har udte char ka apna dialogue — sirf REFERENCE ke liye likha hai, screen pe
    text NAHI aayega, sirf awaaz bajegi. Apni recording inhi naam se daalo:
@@ -123,7 +125,11 @@ const DIALOGUES = [
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const AIM_MODE = 'point';           // point = pointer bilkul cursor/ungli pe
-const FLY_SPEED = [0.0030, 0.0042];
+/* MOBILE SPEED — pehle [0.0030, 0.0042] tha: laptop (1440px) pe theek lagta tha,
+   par phone (390px) pe flyer 4x kam px/sec chalta tha, isliye slow lagta tha.
+   Ab ~40% tez: screen paar karne me ~3-4 sec. Flame (30U/frame) ab bhi flyer se
+   ~10x tez hai, to hit rate pe asar nahi padna chahiye — neeche verify kiya hai. */
+const FLY_SPEED = [0.0042, 0.0058];
 const GRAVITY = 0.00028;
 const RESPAWN_FRAMES = 70;
 const SPIN_TURNS = 1;               // hit ke baad girte hue kitne round ghumega = 1 poora round
@@ -148,12 +154,23 @@ let W, H, U;
 const bed = { x: 0, y: 0 };
 let started = false, paused = false;
 
+/* MOBILE SHARPNESS (DPR) — pehle canvas CSS pixels (390x844) pe banta tha, par
+   phone ki screen 2-3x physical pixels ki hoti hai — browser chhote canvas ko
+   khinch ke dikhata tha, isliye face photos blurry lagti thi (laptop pe canvas
+   bada hota hai, isliye wahan sahi dikhta tha). Ab canvas devicePixelRatio se
+   banta hai (max 2x — 3x fill-rate bahut bhari padta aur game slow karta),
+   aur saara game logic waise hi CSS pixels (W/H/U) me chalta hai. */
+let DPR = 1;
 function resize() {
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
-  W = canvas.width; H = canvas.height;
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(innerWidth * DPR);
+  canvas.height = Math.round(innerHeight * DPR);
+  W = innerWidth; H = innerHeight;
   U = Math.min(H / 1000, W / 480);
   bed.x = W * 0.5; bed.y = H * 0.78;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 }
 resize();
 addEventListener('resize', resize);
@@ -543,6 +560,7 @@ function drawHand(x, y, a) {
   ctx.restore();
 }
 function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); // har frame transform pakka — resize ke baad bhi
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#ebe5ea'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center'; ctx.fillStyle = '#222';
@@ -613,7 +631,10 @@ function draw() {
 }
 let last = performance.now(), acc = 0;
 function loop(now) {
-  acc += Math.min(100, now - last); last = now;
+  /* MOBILE SLOW-MO FIX — pehle cap 100ms tha: phone pe frame rate girte hi
+     (throttling / low-power mode) game time peeche reh jata tha aur flyer
+     slow-motion me chalte the. Cap 250ms: 8fps tak bhi game real-time chalega. */
+  acc += Math.min(250, now - last); last = now;
   while (acc >= 1000 / 60) { if (started && !paused) update(); acc -= 1000 / 60; }
   draw(); requestAnimationFrame(loop);
 }
