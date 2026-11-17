@@ -76,7 +76,7 @@
 
 <div class="overlay" id="startScreen">
   <h1>Mutthal Narya</h1>
-  <p>Are Soja Narya Soja.</p>
+  <p>Soja Narya Soja.</p>
   <button id="btnPlay">▶ &nbsp;PLAY</button>
 </div>
 
@@ -93,8 +93,7 @@ const FLY_FACE_FILES = [                          // udne wale — 5 alag faces,
   'assets/fly1.png',
   'assets/fly2.png',
   'assets/fly3.png',
-  'assets/fly4.png',
-  'assets/fly5.png'
+  'assets/fly4.png'
 ];
 const HIT_SOUND_FILE = 'assets/hit.mp3';          // bed wale ki hit voice (optional)
 const FIRE_SOUND_FILE = 'assets/fire.mp3';         // fire/bullet ki awaaz — jab bed wala shoot kare (optional)
@@ -103,8 +102,7 @@ const FLY_VOICE_FILES = [                          // har face ki APNI awaaz (di
   'assets/voice1.mp3',  // fly1 ki awaaz
   'assets/voice2.mp3',  // fly2 ki awaaz
   'assets/voice3.mp3',  // fly3 ki awaaz
-  'assets/voice4.mp3',  // fly4 ki awaaz
-  'assets/voice5.mp3'   // fly5 ki awaaz
+  'assets/voice4.mp3'   // fly4 ki awaaz
 ];
 /* Har udte char ka apna dialogue — sirf REFERENCE ke liye likha hai, screen pe
    text NAHI aayega, sirf awaaz bajegi. Apni recording inhi naam se daalo:
@@ -127,9 +125,10 @@ const ctx = canvas.getContext('2d');
 const AIM_MODE = 'point';           // point = pointer bilkul cursor/ungli pe
 /* MOBILE SPEED — pehle [0.0030, 0.0042] tha: laptop (1440px) pe theek lagta tha,
    par phone (390px) pe flyer 4x kam px/sec chalta tha, isliye slow lagta tha.
-   Ab ~40% tez: screen paar karne me ~3-4 sec. Flame (30U/frame) ab bhi flyer se
-   ~10x tez hai, to hit rate pe asar nahi padna chahiye — neeche verify kiya hai. */
-const FLY_SPEED = [0.0042, 0.0058];
+   Phir [0.0042, 0.0058] kiya (~40% tez) — phir bhi slow laga, to ab [0.0055, 0.0072]
+   (~30% aur tez). Flame (30U/frame) ab bhi flyer se ~8x tez hai, to hit rate
+   pe asar nahi padna chahiye — neeche verify kiya hai. */
+const FLY_SPEED = [0.0055, 0.0072];
 const GRAVITY = 0.00028;
 const RESPAWN_FRAMES = 70;
 const SPIN_TURNS = 1;               // hit ke baad girte hue kitne round ghumega = 1 poora round
